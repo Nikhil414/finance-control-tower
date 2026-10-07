@@ -372,6 +372,26 @@ def test_workbook_decision_sheet_matches_importer_columns(tmp_path):
     assert header == COLUMNS
 
 
+def test_workbook_stores_injected_formulas_as_text(tmp_path):
+    """Evidence and the AI-written brief are untrusted. A value like
+    =HYPERLINK(...) must reach the reviewer as text, not as a live formula."""
+    from openpyxl import Workbook, load_workbook
+
+    from build_review_workbook import _neutralise_formulas
+
+    payload = '=HYPERLINK("http://evil.example","click")'
+    workbook = Workbook()
+    workbook.active.append(["F-1", payload, "- markdown bullet", 42])
+    _neutralise_formulas(workbook)
+    workbook.save(tmp_path / "wb.xlsx")
+
+    row = next(load_workbook(tmp_path / "wb.xlsx").active.iter_rows())
+    assert row[1].data_type == "s"
+    assert row[1].value == payload
+    assert row[2].value == "- markdown bullet"
+    assert row[3].value == 42
+
+
 def test_workbook_control_totals_match_the_database(tmp_path, conn, run_id):
     """The workbook must be tieable back to Postgres, or it is an unverifiable
     extract."""

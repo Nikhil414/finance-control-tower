@@ -470,6 +470,26 @@ def _sheet_decision_template(workbook, findings: list[dict]) -> None:
 # ---------------------------------------------------------------- build
 
 
+def _neutralise_formulas(workbook) -> None:
+    """Store every '='-leading string as text, never as a formula.
+
+    The workbook carries untrusted text: evidence values from source data and
+    the executive brief, which is model output. openpyxl turns any string that
+    starts with '=' into a live formula, so an evidence field or a prompt
+    injection could plant =HYPERLINK(...) or =WEBSERVICE(...) in a reviewer's
+    Excel. The workbook generates no formulas of its own (dropdowns live in data
+    validation, not cells), so every formula cell is injected and safe to
+    downgrade. Forcing the type keeps the text exact -- prefixing an apostrophe
+    would corrupt the brief's markdown bullets.
+    """
+    for sheet in workbook.worksheets:
+        for row in sheet.iter_rows():
+            for cell in row:
+                if cell.data_type == "f":
+                    cell.data_type = "s"
+
+
+
 def build(run_id: str | None = None, output_path: Path | None = None) -> Path:
     EXCEL_DIR.mkdir(parents=True, exist_ok=True)
     output_path = output_path or EXCEL_DIR / "Finance_Review_Workbook.xlsx"
@@ -505,6 +525,7 @@ def build(run_id: str | None = None, output_path: Path | None = None) -> Path:
     _sheet_control_totals(workbook, totals, run_id)
     _sheet_management_summary(workbook, run_id)
     _sheet_lists_and_rules(workbook)
+    _neutralise_formulas(workbook)
 
     workbook.save(output_path)
     logger.info("workbook written to %s (%d open cases)", output_path, len(findings))

@@ -8,7 +8,7 @@
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?logo=postgresql&logoColor=white)
 ![Power BI](https://img.shields.io/badge/Power%20BI-Dashboard-F2C811?logo=powerbi&logoColor=black)
 ![Excel](https://img.shields.io/badge/Excel-Review%20Loop-217346?logo=microsoftexcel&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-137%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-138%20passing-brightgreen)
 ![AI](https://img.shields.io/badge/AI-explains%2C%20never%20decides-8A2BE2)
 
 **SQL controls · Python detection · evidence-restricted AI investigator · Excel human review · Power BI control tower**<br>
@@ -66,7 +66,7 @@ I built a small **finance-control operating system**, not just a dashboard:
 | Reconciliation match rate | 95.24% |
 | Data quality score | 98.75% |
 | Pipeline runtime | ~1.5 s |
-| Tests | 137 passing |
+| Tests | 138 passing |
 
 ---
 
@@ -104,7 +104,7 @@ Design targets for each page are in [`docs/dashboard-design/`](docs/dashboard-de
 | **Responsible AI** | Structurally sandboxed LLM, PII-free prompts, graceful degradation on outage |
 | **BI & visualization** | Power BI, DAX measures, 7-page control tower, reconciliation-to-source validation page |
 | **Excel** | Reviewer workbook, validated CSV round-trip with no VBA |
-| **Testing** | 137 pytest tests: unit, end-to-end, idempotency, failure paths, AST-level security checks |
+| **Testing** | 138 pytest tests: unit, end-to-end, idempotency, failure paths, AST-level security checks |
 
 ---
 
@@ -360,7 +360,7 @@ powerbi/
   Finance_Control_Tower.pbix  the finished report
   dax_measures.md        every measure, copy-paste ready
   BUILD_GUIDE.md         connection, relationships, pages, validation
-tests/                   137 tests
+tests/                   138 tests
 docs/
   finding_contract.md    the contract, with reasoning
   architecture.html      interactive architecture diagram (Archify)
