@@ -1,0 +1,481 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Finance Analytics Agent Operating System",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "detection-path",
+        "label": "Detection path",
+        "focus": [
+          "sources",
+          "staging",
+          "sqlcontrols",
+          "recon",
+          "leakage",
+          "casemodel"
+        ],
+        "note": "Source files land unfiltered, three independent detectors run, findings converge on one case model."
+      },
+      {
+        "id": "contract-governance",
+        "label": "Contract governance",
+        "focus": [
+          "contract",
+          "casemodel",
+          "sqlcontrols",
+          "recon",
+          "leakage"
+        ],
+        "note": "24 registered rules, one severity ladder, one natural key. Nothing reaches the case model unvalidated."
+      },
+      {
+        "id": "ai-containment",
+        "label": "AI containment",
+        "focus": [
+          "casemodel",
+          "ai",
+          "excel"
+        ],
+        "note": "The investigator receives a JSON file and writes Markdown. It holds no database driver or credentials."
+      },
+      {
+        "id": "human-loop",
+        "label": "Human review loop",
+        "focus": [
+          "casemodel",
+          "excel",
+          "importer"
+        ],
+        "note": "Decisions leave as CSV, are validated in full before any write, and are recorded append-only."
+      },
+      {
+        "id": "reporting",
+        "label": "Reporting",
+        "focus": [
+          "casemodel",
+          "powerbi"
+        ],
+        "note": "Power BI reads star-schema views only, and every tile ties back to rpt_control_totals."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "orchestrator",
+      "type": "backend",
+      "label": "Orchestrator",
+      "sublabel": "run_pipeline.py",
+      "pos": [
+        40,
+        80
+      ],
+      "size": [
+        175,
+        70
+      ],
+      "tag": "one command, one run_id"
+    },
+    {
+      "id": "sources",
+      "type": "external",
+      "label": "Source files",
+      "sublabel": "11 CSV extracts",
+      "pos": [
+        40,
+        300
+      ],
+      "size": [
+        165,
+        78
+      ],
+      "tag": "2,312 rows"
+    },
+    {
+      "id": "leakage",
+      "type": "backend",
+      "label": "Leakage engine",
+      "sublabel": "Python, 6 rules",
+      "pos": [
+        40,
+        480
+      ],
+      "size": [
+        175,
+        80
+      ],
+      "tag": "deterministic"
+    },
+    {
+      "id": "staging",
+      "type": "database",
+      "label": "Staging",
+      "sublabel": "landing zone",
+      "pos": [
+        245,
+        300
+      ],
+      "size": [
+        170,
+        78
+      ],
+      "tag": "unconstrained by design"
+    },
+    {
+      "id": "sqlcontrols",
+      "type": "backend",
+      "label": "SQL control layer",
+      "sublabel": "KPI + 9 quality checks",
+      "pos": [
+        450,
+        170
+      ],
+      "size": [
+        175,
+        78
+      ],
+      "tag": "owns revenue definition"
+    },
+    {
+      "id": "recon",
+      "type": "backend",
+      "label": "Reconciliation",
+      "sublabel": "bank to ledger",
+      "pos": [
+        450,
+        300
+      ],
+      "size": [
+        175,
+        78
+      ],
+      "tag": "5 break types"
+    },
+    {
+      "id": "contract",
+      "type": "security",
+      "label": "Finding contract",
+      "sublabel": "contract.py",
+      "pos": [
+        450,
+        480
+      ],
+      "size": [
+        175,
+        78
+      ],
+      "tag": "24 rules, 1 natural key"
+    },
+    {
+      "id": "casemodel",
+      "type": "database",
+      "label": "Case model",
+      "sublabel": "findings, events, reviews",
+      "pos": [
+        655,
+        295
+      ],
+      "size": [
+        180,
+        90
+      ],
+      "tag": "immutable + append-only"
+    },
+    {
+      "id": "ai",
+      "type": "external",
+      "label": "AI investigator",
+      "sublabel": "drafts commentary",
+      "pos": [
+        860,
+        170
+      ],
+      "size": [
+        175,
+        78
+      ],
+      "tag": "no DB driver"
+    },
+    {
+      "id": "excel",
+      "type": "frontend",
+      "label": "Review workbook",
+      "sublabel": "Excel, 8 sheets",
+      "pos": [
+        860,
+        300
+      ],
+      "size": [
+        175,
+        78
+      ],
+      "tag": "68 open cases"
+    },
+    {
+      "id": "importer",
+      "type": "security",
+      "label": "Decision gate",
+      "sublabel": "import_reviews.py",
+      "pos": [
+        860,
+        480
+      ],
+      "size": [
+        175,
+        78
+      ],
+      "tag": "all-or-nothing"
+    },
+    {
+      "id": "powerbi",
+      "type": "frontend",
+      "label": "Control tower",
+      "sublabel": "Power BI, 5 pages",
+      "pos": [
+        1065,
+        295
+      ],
+      "size": [
+        180,
+        90
+      ],
+      "tag": "ties to source"
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "PostgreSQL",
+      "wraps": [
+        "staging",
+        "sqlcontrols",
+        "recon",
+        "casemodel"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "no DB credentials",
+      "wraps": [
+        "ai"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "human review gate",
+      "wraps": [
+        "excel",
+        "importer"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "drive-run",
+      "from": "orchestrator",
+      "to": "staging",
+      "label": "halts on missing file",
+      "variant": "security",
+      "fromSide": "right",
+      "toSide": "top",
+      "labelDy": -16
+    },
+    {
+      "id": "land-sources",
+      "from": "sources",
+      "to": "staging",
+      "label": "defects kept",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left",
+      "labelAt": [
+        225,
+        286
+      ]
+    },
+    {
+      "id": "read-csv-direct",
+      "from": "sources",
+      "to": "leakage",
+      "label": "reads CSV direct",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "quality-and-kpi",
+      "from": "staging",
+      "to": "sqlcontrols",
+      "label": "KPI + integrity",
+      "fromSide": "top",
+      "toSide": "left",
+      "labelAt": [
+        380,
+        200
+      ]
+    },
+    {
+      "id": "settlement-match",
+      "from": "staging",
+      "to": "recon",
+      "label": "exactly once",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left",
+      "labelAt": [
+        435,
+        392
+      ]
+    },
+    {
+      "id": "sql-findings",
+      "from": "sqlcontrols",
+      "to": "casemodel",
+      "label": "46 findings",
+      "fromSide": "right",
+      "toSide": "top",
+      "labelDy": -14
+    },
+    {
+      "id": "recon-findings",
+      "from": "recon",
+      "to": "casemodel",
+      "label": "15 breaks",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left",
+      "labelAt": [
+        640,
+        286
+      ]
+    },
+    {
+      "id": "leakage-findings",
+      "from": "leakage",
+      "to": "casemodel",
+      "label": "7 via JSON",
+      "fromSide": "right",
+      "toSide": "bottom",
+      "labelDy": 18
+    },
+    {
+      "id": "contract-enforced",
+      "from": "contract",
+      "to": "casemodel",
+      "label": "validated",
+      "variant": "security",
+      "fromSide": "right",
+      "toSide": "bottom",
+      "labelAt": [
+        615,
+        460
+      ]
+    },
+    {
+      "id": "evidence-export",
+      "from": "casemodel",
+      "to": "ai",
+      "label": "JSON only",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "left",
+      "labelDy": -14
+    },
+    {
+      "id": "queue-open-cases",
+      "from": "casemodel",
+      "to": "excel",
+      "label": "open cases",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left",
+      "labelAt": [
+        847,
+        410
+      ]
+    },
+    {
+      "id": "brief-embedded",
+      "from": "ai",
+      "to": "excel",
+      "label": "advisory",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        947,
+        145
+      ]
+    },
+    {
+      "id": "decisions-out",
+      "from": "excel",
+      "to": "importer",
+      "label": "decisions CSV",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        1000,
+        430
+      ]
+    },
+    {
+      "id": "decisions-in",
+      "from": "importer",
+      "to": "casemodel",
+      "label": "append-only",
+      "variant": "security",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "reporting-views",
+      "from": "casemodel",
+      "to": "powerbi",
+      "label": "star schema",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "via": [
+        [
+          745,
+          580
+        ],
+        [
+          1155,
+          580
+        ]
+      ],
+      "labelAt": [
+        950,
+        594
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Detection",
+      "items": [
+        "Staging keeps source defects on purpose so controls can quantify them",
+        "SQL owns revenue; Python detects what SQL cannot"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "One contract",
+      "items": [
+        "24 rules, one finding shape; case identity is the exception, not the run",
+        "Re-running a run creates and destroys nothing"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Boundaries and failure",
+      "items": [
+        "Estimated exposure and confirmed loss never sum; AI has no DB path",
+        "Missing file halts the run; AI outage only degrades the brief"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+refund_id,order_id,payment_id,refund_date,refund_amount,refund_reason,refund_status,approved_by
+REF-TEST-001A,ORD-TEST-001,PAY-000301,2026-08-12 14:00:00,2500.0,Customer Return,Processed,MGR-01
+REF-TEST-001B,ORD-TEST-001,PAY-000301,2026-08-13 09:30:00,2500.0,Customer Return,Processed,MGR-01
+REF-TEST-002A,ORD-TEST-002,PAY-000302,2026-08-18 10:00:00,10000.0,Item Defect,Processed,MGR-02
+REF-TEST-002B,ORD-TEST-002,PAY-000302,2026-08-20 15:00:00,5800.0,Goodwill Concession,Processed,MGR-02
+REF-TEST-008A,ORD-TEST-008,PAY-000306,2026-08-29 11:00:00,21240.0,Defective Product,Processed,MGR-03

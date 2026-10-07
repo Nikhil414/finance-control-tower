@@ -1,0 +1,5 @@
+payment_method,standard_fee_rate,maximum_fee_rate,effective_from
+Card,0.018,0.022,2026-01-01
+UPI,0.0,0.005,2026-01-01
+Wallet,0.015,0.02,2026-01-01
+NetBanking,0.012,0.016,2026-01-01

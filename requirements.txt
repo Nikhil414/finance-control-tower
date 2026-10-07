@@ -1,0 +1,10 @@
+psycopg[binary]>=3.2
+pandas>=2.2
+openpyxl>=3.1
+python-dotenv>=1.0
+pytest>=8.0
+
+# AI investigator. Optional - the pipeline runs without either of these
+# installed and without an API key. Uncomment the provider you use.
+# anthropic>=0.40
+# openai>=1.50

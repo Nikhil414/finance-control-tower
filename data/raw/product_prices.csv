@@ -1,0 +1,7 @@
+product_id,product_name,category,approved_price,minimum_price,effective_from,effective_to
+PRD-001,Pro Gaming Laptop,Electronics,85000.0,75000.0,2026-01-01,2026-12-31
+PRD-002,Wireless Noise-Cancelling Headphones,Electronics,14500.0,12000.0,2026-01-01,2026-12-31
+PRD-003,Ergonomic Office Chair,Furniture,18000.0,15000.0,2026-01-01,2026-06-30
+PRD-003,Ergonomic Office Chair v2,Furniture,19500.0,16500.0,2026-07-01,2026-12-31
+PRD-004,Smart Fitness Watch,Wearables,7500.0,6000.0,2026-01-01,2026-12-31
+PRD-005,Enterprise Server Rack,Enterprise Hardware,250000.0,220000.0,2026-01-01,2026-12-31

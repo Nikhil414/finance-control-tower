@@ -1,0 +1,58 @@
+{
+  "version": "1.0.0",
+  "currency": "INR",
+  "rules": {
+    "duplicate_refunds": {
+      "enabled": true,
+      "lookback_window_days": 3,
+      "require_same_payment": true,
+      "require_same_amount": true,
+      "severity_default": "HIGH"
+    },
+    "excess_refunds": {
+      "enabled": true,
+      "severity_default": "CRITICAL"
+    },
+    "excessive_discounts": {
+      "enabled": true,
+      "max_permitted_discount_pct": 0.2,
+      "allow_authorized_promos": true,
+      "authorized_promo_codes": [
+        "VIP_PARTNER_50",
+        "EMPLOYEE_SPECIAL"
+      ],
+      "severity_default": "MEDIUM"
+    },
+    "delivered_unpaid": {
+      "enabled": true,
+      "grace_period_days": 1,
+      "enterprise_auto_critical": true,
+      "severity_default": "HIGH"
+    },
+    "pricing_errors": {
+      "enabled": true,
+      "match_effective_dates": true,
+      "severity_default": "HIGH"
+    },
+    "unusual_gateway_fees": {
+      "enabled": true,
+      "fee_rate_threshold_buffer_pct": 0.005,
+      "severity_default": "MEDIUM"
+    }
+  },
+  "scoring_weights": {
+    "financial_exposure_weight": 0.5,
+    "rule_severity_weight": 0.25,
+    "aging_weight": 0.15,
+    "customer_segment_weight": 0.1
+  },
+  "customer_segment_multiplier": {
+    "Enterprise": 1.5,
+    "SME": 1.2,
+    "Retail": 1.0
+  },
+  "aging_penalty_threshold_days": 7,
+  "_severity_note": "Severity thresholds intentionally live in config/contract.json, not here. They were duplicated across both files; contract.json is the single authority so SQL, leakage and reconciliation cannot disagree about what HIGH means. This file keeps only rule detection parameters and priority-scoring weights.",
+  "priority_exposure_reference_amount": 1000000.0,
+  "_priority_note": "priority_exposure_reference_amount is the exposure that scores a full 100 on the financial axis. It must sit ABOVE the CRITICAL severity threshold: if it equalled that threshold, every case over it would tie at 100 and the queue would stop ranking by money exactly where money matters most. Tune this to the scale of your largest routine exception."
+}

@@ -1,0 +1,497 @@
+{
+  "version": "1.0.0",
+  "currency": "INR",
+  "description": "Shared finding contract. Authority for run/finding identity, severity, status workflow, and the rule registry. See docs/finding_contract.md for reasoning.",
+
+  "run_id": {
+    "pattern": "^RUN-\\d{8}-\\d{3}$",
+    "example": "RUN-20260912-001",
+    "sql_type": "VARCHAR(20)"
+  },
+
+  "finding_id": {
+    "pattern": "^(KPI|DQ|LK|RC)-\\d{8}-\\d{5}$",
+    "example": "LK-20260912-00001",
+    "sql_type": "VARCHAR(32)",
+    "note": "Label only. Deduplication uses natural_key, not this field."
+  },
+
+  "natural_key": [
+    "rule_code",
+    "entity_type",
+    "entity_id",
+    "evidence_hash"
+  ],
+
+  "_natural_key_note": "run_id is deliberately NOT part of the key. A case is identified by what the exception IS, not by which run noticed it, so re-detecting the same unresolved exception tomorrow updates the existing case instead of opening a second one. Including run_id made every run re-open every finding: exposure accumulated across runs for exceptions that had not been fixed, and a case's review history was stranded on an older snapshot while a fresh OPEN duplicate appeared beside it. Aging, SLA and backlog are only meaningful if a case survives the run that found it.",
+
+  "evidence_hash": {
+    "algorithm": "sha256",
+    "input": "canonical JSON of evidence_json: sorted keys, separators (',',':'), no whitespace",
+    "excludes": ["detected_at"],
+    "note": "detected_at is excluded so a rerun of the same exception hashes identically"
+  },
+
+  "source_modules": {
+    "KPI": { "finding_prefix": "KPI", "detector": "sql" },
+    "DATA_QUALITY": { "finding_prefix": "DQ", "detector": "sql" },
+    "LEAKAGE": { "finding_prefix": "LK", "detector": "python" },
+    "RECONCILIATION": { "finding_prefix": "RC", "detector": "sql" }
+  },
+
+  "severity_levels": ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
+
+  "severity_thresholds": {
+    "CRITICAL": 100000.0,
+    "HIGH": 25000.0,
+    "MEDIUM": 5000.0,
+    "LOW": 0.0,
+    "note": "Amount ladder, inclusive lower bound. Rule-level escalations in rules[].escalations override this."
+  },
+
+  "sla_days_by_severity": {
+    "CRITICAL": 1,
+    "HIGH": 3,
+    "MEDIUM": 7,
+    "LOW": 14
+  },
+
+  "entity_types": [
+    "VARIES",
+    "ORDER",
+    "ORDER_ITEM",
+    "PAYMENT",
+    "REFUND",
+    "SHIPMENT",
+    "CUSTOMER",
+    "BANK_TXN",
+    "LEDGER_TXN",
+    "KPI_DATE"
+  ],
+
+  "statuses": [
+    "OPEN",
+    "ASSIGNED",
+    "UNDER_REVIEW",
+    "FALSE_POSITIVE",
+    "MORE_INFORMATION_REQUIRED",
+    "VALID_EXCEPTION",
+    "ACTION_APPROVED",
+    "RESOLVED"
+  ],
+
+  "detector_writable_statuses": ["OPEN"],
+
+  "terminal_statuses": ["RESOLVED"],
+
+  "status_transitions": {
+    "OPEN": ["ASSIGNED", "UNDER_REVIEW"],
+    "ASSIGNED": ["UNDER_REVIEW"],
+    "UNDER_REVIEW": ["FALSE_POSITIVE", "MORE_INFORMATION_REQUIRED", "VALID_EXCEPTION"],
+    "MORE_INFORMATION_REQUIRED": ["UNDER_REVIEW"],
+    "FALSE_POSITIVE": ["RESOLVED", "UNDER_REVIEW"],
+    "VALID_EXCEPTION": ["ACTION_APPROVED", "MORE_INFORMATION_REQUIRED", "FALSE_POSITIVE"],
+    "ACTION_APPROVED": ["RESOLVED"],
+    "RESOLVED": []
+  },
+
+  "_status_transitions_note": "A decision may be revised until it is approved or resolved. Reviewers get things wrong, and a graph that forbids correction forces them either to approve a case they have come to doubt or to leave it stuck -- both worse than an audited change of mind. Correction is safe because fact_reviews is append-only: the original judgement survives alongside the revision. RESOLVED remains terminal; reopening a resolved case means a new finding, not an edited one. Note that ACTION_APPROVED is still reachable only from VALID_EXCEPTION, so approval cannot be skipped.",
+
+  "decision_requirements": {
+    "FALSE_POSITIVE": ["reviewer", "false_positive_reason"],
+    "VALID_EXCEPTION": ["reviewer", "reviewer_notes", "confirmed_loss"],
+    "ACTION_APPROVED": ["reviewer", "approved_action"],
+    "RESOLVED": ["reviewer", "resolution_date"],
+    "note": "Fields that must be non-empty in review_decisions.csv for the transition to be accepted"
+  },
+
+  "exposure_semantics": {
+    "risk_amount": "Estimated exposure computed by a rule. Never confirmed loss. Lives in fact_findings.",
+    "confirmed_loss": "Human-confirmed loss after review. Lives in fact_reviews only.",
+    "recovered_amount": "Amount actually recovered. Lives in fact_reviews only.",
+    "gross_exposure": "SUM(risk_amount) across findings. Double-counts by construction; rule-level breakdowns only.",
+    "deduplicated_exposure": "SUM(MAX(risk_amount) per order_id). The defensible headline figure.",
+    "never_sum_together": ["risk_amount", "confirmed_loss", "recovered_amount"]
+  },
+
+  "evidence_rules": {
+    "flat_scalars_only": true,
+    "allowed_value_types": ["string", "number", "boolean", "null"],
+    "must_reproduce_calculation": true,
+    "no_pii": true,
+    "forbidden_evidence_keys": [
+      "customer_name",
+      "email",
+      "phone",
+      "address",
+      "card_number",
+      "account_holder_name"
+    ]
+  },
+
+  "ai_investigator": {
+    "allowed_actions": [
+      "draft_commentary",
+      "recommend_next_check",
+      "request_review",
+      "flag_missing_evidence",
+      "group_related_cases",
+      "prepare_management_summary",
+      "score_false_positive_likelihood"
+    ],
+    "forbidden": [
+      "database_write",
+      "status_change",
+      "severity_change",
+      "risk_amount_change",
+      "priority_score_change",
+      "kpi_recalculation",
+      "claim_confirmed_loss",
+      "invent_evidence"
+    ],
+    "outputs": ["outputs/executive_brief.md", "outputs/ai_commentary.json"],
+    "failure_mode": "degrade_to_deterministic_template",
+    "affects_exit_code": false
+  },
+
+  "rules": [
+    {
+      "rule_code": "DUPLICATE_REFUND",
+      "source_module": "LEAKAGE",
+      "entity_type": "REFUND",
+      "default_severity": "HIGH",
+      "approval_required": true,
+      "exposure_basis": "Refund amount issued more than once against the same payment",
+      "required_evidence_keys": [
+        "original_refund_id",
+        "duplicate_refund_id",
+        "payment_id",
+        "refund_amount",
+        "original_refund_date",
+        "duplicate_refund_date",
+        "days_between"
+      ]
+    },
+    {
+      "rule_code": "REFUND_EXCEEDS_PAYMENT",
+      "source_module": "LEAKAGE",
+      "entity_type": "ORDER",
+      "default_severity": "CRITICAL",
+      "approval_required": true,
+      "exposure_basis": "Processed refunds minus collected payments",
+      "required_evidence_keys": [
+        "total_collected_payment",
+        "total_processed_refunds",
+        "excess_refund_amount"
+      ]
+    },
+    {
+      "rule_code": "EXCESSIVE_DISCOUNT",
+      "source_module": "LEAKAGE",
+      "entity_type": "ORDER",
+      "default_severity": "MEDIUM",
+      "approval_required": true,
+      "exposure_basis": "Discount granted above policy ceiling",
+      "required_evidence_keys": [
+        "gross_amount",
+        "actual_discount_amount",
+        "actual_discount_pct",
+        "max_permitted_discount_pct",
+        "discount_code",
+        "excess_discount_amount"
+      ]
+    },
+    {
+      "rule_code": "DELIVERED_UNPAID",
+      "source_module": "LEAKAGE",
+      "entity_type": "ORDER",
+      "default_severity": "HIGH",
+      "approval_required": true,
+      "exposure_basis": "Delivered order value minus collected payments",
+      "escalations": [
+        {
+          "when": "customer_segment == 'Enterprise'",
+          "severity": "CRITICAL",
+          "why": "Credit exposure on an enterprise account outweighs invoice size"
+        }
+      ],
+      "required_evidence_keys": [
+        "order_final_amount",
+        "successful_payment_amount",
+        "shortfall_amount",
+        "delivery_date",
+        "courier"
+      ]
+    },
+    {
+      "rule_code": "PRICING_ERROR",
+      "source_module": "LEAKAGE",
+      "entity_type": "ORDER_ITEM",
+      "default_severity": "HIGH",
+      "approval_required": true,
+      "exposure_basis": "(minimum_price - charged_price) * quantity",
+      "required_evidence_keys": [
+        "product_id",
+        "quantity",
+        "actual_unit_price",
+        "approved_price",
+        "minimum_permitted_price",
+        "pricing_shortfall_per_unit"
+      ]
+    },
+    {
+      "rule_code": "UNUSUAL_GATEWAY_FEE",
+      "source_module": "LEAKAGE",
+      "entity_type": "PAYMENT",
+      "default_severity": "MEDIUM",
+      "approval_required": true,
+      "exposure_basis": "Actual gateway fee minus standard-rate fee",
+      "required_evidence_keys": [
+        "payment_id",
+        "payment_method",
+        "payment_amount",
+        "actual_gateway_fee",
+        "actual_fee_rate_pct",
+        "max_permitted_fee_rate_pct",
+        "excess_fee_amount"
+      ]
+    },
+
+    {
+      "rule_code": "BANK_ONLY_TRANSACTION",
+      "source_module": "RECONCILIATION",
+      "entity_type": "BANK_TXN",
+      "default_severity": "HIGH",
+      "approval_required": true,
+      "exposure_basis": "Full bank amount - cash received with no ledger entry",
+      "required_evidence_keys": [
+        "bank_txn_id",
+        "bank_amount",
+        "bank_value_date",
+        "bank_reference",
+        "match_attempts"
+      ]
+    },
+    {
+      "rule_code": "LEDGER_ONLY_TRANSACTION",
+      "source_module": "RECONCILIATION",
+      "entity_type": "LEDGER_TXN",
+      "default_severity": "HIGH",
+      "approval_required": true,
+      "exposure_basis": "Full ledger amount - revenue booked but never banked",
+      "required_evidence_keys": [
+        "ledger_txn_id",
+        "ledger_amount",
+        "ledger_posting_date",
+        "ledger_reference",
+        "match_attempts"
+      ]
+    },
+    {
+      "rule_code": "AMOUNT_MISMATCH",
+      "source_module": "RECONCILIATION",
+      "entity_type": "BANK_TXN",
+      "default_severity": "MEDIUM",
+      "approval_required": true,
+      "exposure_basis": "Absolute difference between bank and ledger amount",
+      "required_evidence_keys": [
+        "bank_txn_id",
+        "ledger_txn_id",
+        "bank_amount",
+        "ledger_amount",
+        "absolute_difference",
+        "matched_on"
+      ]
+    },
+    {
+      "rule_code": "DATE_MISMATCH",
+      "source_module": "RECONCILIATION",
+      "entity_type": "BANK_TXN",
+      "default_severity": "LOW",
+      "approval_required": false,
+      "exposure_basis": "Zero. Timing break, not a loss - see docs/finding_contract.md section 5",
+      "zero_exposure_by_design": true,
+      "required_evidence_keys": [
+        "bank_txn_id",
+        "ledger_txn_id",
+        "bank_value_date",
+        "ledger_posting_date",
+        "day_difference",
+        "tolerance_days"
+      ]
+    },
+    {
+      "rule_code": "DUPLICATE_SETTLEMENT",
+      "source_module": "RECONCILIATION",
+      "entity_type": "BANK_TXN",
+      "default_severity": "CRITICAL",
+      "approval_required": true,
+      "exposure_basis": "Value of the extra settlement credited",
+      "required_evidence_keys": [
+        "original_bank_txn_id",
+        "duplicate_bank_txn_id",
+        "settlement_amount",
+        "bank_reference",
+        "days_between"
+      ]
+    },
+
+    {
+      "rule_code": "ORDER_WITHOUT_PAYMENT",
+      "source_module": "DATA_QUALITY",
+      "entity_type": "ORDER",
+      "default_severity": "MEDIUM",
+      "approval_required": false,
+      "exposure_basis": "Order final amount",
+      "required_evidence_keys": ["order_id", "order_date", "order_status", "final_amount"]
+    },
+    {
+      "rule_code": "PAYMENT_AMOUNT_MISMATCH",
+      "source_module": "DATA_QUALITY",
+      "entity_type": "PAYMENT",
+      "default_severity": "MEDIUM",
+      "approval_required": false,
+      "exposure_basis": "Absolute difference between payment and order final amount",
+      "required_evidence_keys": [
+        "payment_id",
+        "order_id",
+        "payment_amount",
+        "order_final_amount",
+        "absolute_difference"
+      ]
+    },
+    {
+      "rule_code": "ORPHAN_PAYMENT",
+      "source_module": "DATA_QUALITY",
+      "entity_type": "PAYMENT",
+      "default_severity": "HIGH",
+      "approval_required": false,
+      "exposure_basis": "Payment amount",
+      "required_evidence_keys": ["payment_id", "order_id", "payment_amount", "payment_date"]
+    },
+    {
+      "rule_code": "ORPHAN_REFUND",
+      "source_module": "DATA_QUALITY",
+      "entity_type": "REFUND",
+      "default_severity": "HIGH",
+      "approval_required": false,
+      "exposure_basis": "Refund amount",
+      "required_evidence_keys": ["refund_id", "order_id", "payment_id", "refund_amount"]
+    },
+    {
+      "rule_code": "NEGATIVE_AMOUNT",
+      "source_module": "DATA_QUALITY",
+      "entity_type": "VARIES",
+      "default_severity": "HIGH",
+      "approval_required": false,
+      "exposure_basis": "Absolute value of the negative amount",
+      "required_evidence_keys": ["table_name", "column_name", "record_id", "observed_value"]
+    },
+    {
+      "rule_code": "DUPLICATE_PRIMARY_KEY",
+      "source_module": "DATA_QUALITY",
+      "entity_type": "VARIES",
+      "default_severity": "CRITICAL",
+      "approval_required": false,
+      "exposure_basis": "Zero. Integrity failure, not exposure.",
+      "zero_exposure_by_design": true,
+      "required_evidence_keys": ["table_name", "key_column", "duplicate_value", "occurrence_count"]
+    },
+    {
+      "rule_code": "MISSING_KPI_TARGET",
+      "source_module": "DATA_QUALITY",
+      "entity_type": "KPI_DATE",
+      "default_severity": "MEDIUM",
+      "approval_required": false,
+      "exposure_basis": "Zero. A trading day with no target row turns the KPI comparison into a null join, which hides the variance instead of reporting it.",
+      "zero_exposure_by_design": true,
+      "required_evidence_keys": ["metric_date", "order_count", "net_revenue"]
+    },
+    {
+      "rule_code": "DUPLICATE_TRANSACTION_REFERENCE",
+      "source_module": "DATA_QUALITY",
+      "entity_type": "PAYMENT",
+      "default_severity": "HIGH",
+      "approval_required": false,
+      "exposure_basis": "Zero. Ambiguous key, not exposure -- but it is a join-multiplication hazard: a reference matching two candidates on each side of reconciliation fans out into four match rows and inflates both match and break counts.",
+      "zero_exposure_by_design": true,
+      "required_evidence_keys": [
+        "transaction_reference",
+        "occurrence_count",
+        "affected_payment_ids",
+        "distinct_amounts"
+      ]
+    },
+    {
+      "rule_code": "UNKNOWN_CUSTOMER_REFERENCE",
+      "source_module": "DATA_QUALITY",
+      "entity_type": "ORDER",
+      "default_severity": "MEDIUM",
+      "approval_required": false,
+      "exposure_basis": "Zero. Referential gap, not exposure.",
+      "zero_exposure_by_design": true,
+      "required_evidence_keys": ["order_id", "customer_id", "order_date"]
+    },
+
+    {
+      "rule_code": "REVENUE_BELOW_TARGET",
+      "source_module": "KPI",
+      "entity_type": "KPI_DATE",
+      "default_severity": "MEDIUM",
+      "approval_required": false,
+      "exposure_basis": "Revenue shortfall against target",
+      "required_evidence_keys": [
+        "metric_date",
+        "net_revenue",
+        "target_revenue",
+        "variance_amount",
+        "variance_pct"
+      ]
+    },
+    {
+      "rule_code": "PAYMENT_SUCCESS_BELOW_TARGET",
+      "source_module": "KPI",
+      "entity_type": "KPI_DATE",
+      "default_severity": "MEDIUM",
+      "approval_required": false,
+      "exposure_basis": "Zero. Rate gap, not an amount.",
+      "zero_exposure_by_design": true,
+      "required_evidence_keys": [
+        "metric_date",
+        "payment_success_rate",
+        "target_payment_success_rate",
+        "variance_pct_points"
+      ]
+    },
+    {
+      "rule_code": "ORDER_COUNT_BELOW_TARGET",
+      "source_module": "KPI",
+      "entity_type": "KPI_DATE",
+      "default_severity": "LOW",
+      "approval_required": false,
+      "exposure_basis": "Zero. Volume gap, not an amount.",
+      "zero_exposure_by_design": true,
+      "required_evidence_keys": [
+        "metric_date",
+        "order_count",
+        "target_order_count",
+        "variance_count"
+      ]
+    },
+    {
+      "rule_code": "REFUND_RATE_ABOVE_THRESHOLD",
+      "source_module": "KPI",
+      "entity_type": "KPI_DATE",
+      "default_severity": "HIGH",
+      "approval_required": false,
+      "exposure_basis": "Refund value above the accepted threshold",
+      "required_evidence_keys": [
+        "metric_date",
+        "refund_value",
+        "refund_rate_pct",
+        "threshold_rate_pct",
+        "excess_refund_value"
+      ]
+    }
+  ]
+}
